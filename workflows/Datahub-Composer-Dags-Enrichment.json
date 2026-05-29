@@ -82,13 +82,13 @@
         256,
         352
       ],
+      "webhookId": "672adec7-efb8-4015-80a9-d93431be8eae",
       "credentials": {
         "httpHeaderAuth": {
           "id": "zt4TZEe7CZ29utc4",
           "name": "PagerDuty MCP - Webhook Auth"
         }
-      },
-      "webhookId": "cc5e6e90-ab46-4933-88ad-220db78033fb"
+      }
     },
     {
       "parameters": {
@@ -98,6 +98,12 @@
               "id": "field-incident-id",
               "name": "incident_id",
               "value": "={{ $json.body?.incident_id ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-incident-number",
+              "name": "incident_number",
+              "value": "={{ $json.body?.incident_number ?? 'unknown' }}",
               "type": "string"
             },
             {
@@ -115,13 +121,13 @@
             {
               "id": "field-composer",
               "name": "composer",
-              "value": "={{ ($json.body?.title ?? '').match(/\\s+in\\s+(.+?)\\s+from\\s+/)?.[1] ?? 'unknown' }}",
+              "value": "={{ ($json.body?.title ?? '').match(/\\s+in\\s+(.+?)\\s+(?:from|for)\\s+/)?.[1] ?? 'unknown' }}",
               "type": "string"
             },
             {
               "id": "field-project",
               "name": "project",
-              "value": "={{ ($json.body?.title ?? '').match(/\\s+from\\s+(.+?)\\s+failed/)?.[1] ?? 'unknown' }}",
+              "value": "={{ ($json.body?.title ?? '').match(/\\s+(?:from|for)\\s+(.+?)\\s+failed/)?.[1] ?? 'unknown' }}",
               "type": "string"
             },
             {
@@ -153,36 +159,6 @@
       "position": [
         544,
         240
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Log the incoming alert for debugging and audit trail\nconst item = $input.first().json;\nconsole.log('[DynatraceInvestigate] Received alert:', JSON.stringify({\n  incident_id: item.incident_id,\n  incident_title: item.incident_title,\n  service_name: item.service_name,\n  received_at: item.received_at\n}));\nreturn $input.all();"
-      },
-      "id": "node-log",
-      "name": "Log Investigation Request",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1680,
-        304
-      ]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ status: 'received', incident_id: $json.incident_id, timestamp: $json.received_at }) }}",
-        "options": {
-          "responseCode": 200
-        }
-      },
-      "id": "node-respond-ok",
-      "name": "Respond 200 OK",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
-      "position": [
-        1904,
-        304
       ]
     },
     {
@@ -235,6 +211,15 @@
       ]
     },
     {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "wuJmuh2VEmxOE3mg",
+          "mode": "id"
+        },
+        "returnAll": true
+      },
       "id": "node-datatable-lookup",
       "name": "Get DAG from Table",
       "type": "n8n-nodes-base.dataTable",
@@ -242,30 +227,12 @@
       "position": [
         960,
         304
-      ],
-      "parameters": {
-        "resource": "row",
-        "operation": "get",
-        "dataTableId": {
-          "__rl": true,
-          "value": "dvMXwohR5lwZAx3g",
-          "mode": "id"
-        },
-        "mustMatch": "allFilters",
-        "conditions": {
-          "conditions": [
-            {
-              "keyName": "DAG",
-              "condition": "equals",
-              "keyValue": "={{ $('Extract Alert Context').first().json.dag_id }}"
-            }
-          ]
-        },
-        "returnAll": true,
-        "options": {}
-      }
+      ]
     },
     {
+      "parameters": {
+        "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table \u2014 find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason } }];\n"
+      },
       "id": "node-dag-lookup",
       "name": "DAG Support Lookup",
       "type": "n8n-nodes-base.code",
@@ -273,34 +240,21 @@
       "position": [
         1200,
         304
-      ],
-      "parameters": {
-        "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table \u2014 find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason } }];\n",
-        "mode": "runOnceForAllItems"
-      }
+      ]
     },
     {
+      "parameters": {},
       "id": "node-test-trigger",
       "name": "Test: Manual Trigger",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        60,
-        700
-      ],
-      "parameters": {}
+        64,
+        704
+      ]
     },
     {
-      "id": "node-gdrive-fetch",
-      "name": "Fetch DAG CSV from Google Sheets",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        280,
-        700
-      ],
       "parameters": {
-        "method": "GET",
         "url": "https://docs.google.com/spreadsheets/d/1Ri5mlG2vUN7fYWM9EotGmYpMEU71ZLHDJhtr96dGqA0/export?format=csv&gid=0",
         "options": {
           "response": {
@@ -310,36 +264,168 @@
           },
           "timeout": 30000
         }
-      }
+      },
+      "id": "node-gdrive-fetch",
+      "name": "Fetch DAG CSV from Google Sheets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        288,
+        704
+      ]
     },
     {
+      "parameters": {
+        "jsCode": "// Parse the CSV text fetched from Google Drive\nconst raw = $input.first().json;\nconst csvText = (raw.data ?? raw.body ?? Object.values(raw)[0] ?? '').toString();\n\nconst COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\n// Parse CSV into rows (handles quoted fields with newlines)\nconst lines = csvText.split('\\n');\nconst headers = lines[0].split(',').map(h => h.trim().replace(/^\"|\"$/g, ''));\n\nconst rows = [];\nfor (let i = 1; i < lines.length; i++) {\n  const line = lines[i].trim();\n  if (!line) continue;\n  const cols = line.split(',');\n  const row = {};\n  headers.forEach((h, idx) => {\n    row[h] = (cols[idx] ?? '').replace(/^\"|\"$/g, '').trim();\n  });\n  rows.push(row);\n}\n\n// \u2500\u2500 Test: change this dag_id to test different DAGs \u2500\u2500\nconst TEST_DAG_ID = 'GCS_to_BQ_fcty_ccaas_genesys_mediation_segment_fact_load_app';\n// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nconst match = rows.find(r => (r['DAG'] ?? '').toLowerCase() === TEST_DAG_ID.toLowerCase());\n\nlet result = {\n  test_dag_id: TEST_DAG_ID,\n  total_rows_loaded: rows.length,\n  match_found: !!match,\n  dag_supported: false,\n  support_status: 'Not Found',\n  composer: '',\n  support_reason: \"DAG '\" + TEST_DAG_ID + \"' not found in CSV\"\n};\n\nif (match) {\n  const composerRaw = (match['Datahub Composer'] ?? '').trim();\n  const notes = (match['OtherNotes'] ?? '').split(';')[0].trim();\n  result.composer = COMPOSER_MAP[composerRaw] ?? composerRaw;\n  result.support_status = notes;\n  result.dag_supported = notes.toLowerCase() !== 'not supported';\n  result.support_reason = \"DAG '\" + TEST_DAG_ID + \"' is \" + notes;\n  result.raw_row = match;\n}\n\nreturn [{ json: result }];\n"
+      },
       "id": "node-gdrive-parse",
       "name": "Parse CSV + Test Lookup",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        520,
-        700
-      ],
-      "parameters": {
-        "jsCode": "// Parse the CSV text fetched from Google Drive\nconst raw = $input.first().json;\nconst csvText = (raw.data ?? raw.body ?? Object.values(raw)[0] ?? '').toString();\n\nconst COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\n// Parse CSV into rows (handles quoted fields with newlines)\nconst lines = csvText.split('\\n');\nconst headers = lines[0].split(',').map(h => h.trim().replace(/^\"|\"$/g, ''));\n\nconst rows = [];\nfor (let i = 1; i < lines.length; i++) {\n  const line = lines[i].trim();\n  if (!line) continue;\n  const cols = line.split(',');\n  const row = {};\n  headers.forEach((h, idx) => {\n    row[h] = (cols[idx] ?? '').replace(/^\"|\"$/g, '').trim();\n  });\n  rows.push(row);\n}\n\n// \u2500\u2500 Test: change this dag_id to test different DAGs \u2500\u2500\nconst TEST_DAG_ID = 'GCS_to_BQ_fcty_ccaas_genesys_mediation_segment_fact_load_app';\n// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nconst match = rows.find(r => (r['DAG'] ?? '').toLowerCase() === TEST_DAG_ID.toLowerCase());\n\nlet result = {\n  test_dag_id: TEST_DAG_ID,\n  total_rows_loaded: rows.length,\n  match_found: !!match,\n  dag_supported: false,\n  support_status: 'Not Found',\n  composer: '',\n  support_reason: \"DAG '\" + TEST_DAG_ID + \"' not found in CSV\"\n};\n\nif (match) {\n  const composerRaw = (match['Datahub Composer'] ?? '').trim();\n  const notes = (match['OtherNotes'] ?? '').split(';')[0].trim();\n  result.composer = COMPOSER_MAP[composerRaw] ?? composerRaw;\n  result.support_status = notes;\n  result.dag_supported = notes.toLowerCase() !== 'not supported';\n  result.support_reason = \"DAG '\" + TEST_DAG_ID + \"' is \" + notes;\n  result.raw_row = match;\n}\n\nreturn [{ json: result }];\n",
-        "mode": "runOnceForAllItems"
-      }
+        528,
+        704
+      ]
     },
     {
-      "id": "sticky-test-gdrive",
-      "name": "Section - GDrive Test",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        30,
-        630
-      ],
       "parameters": {
         "content": "### Google Sheets CSV Test Block (decoupled)\nRun manually to test CSV fetch + DAG lookup independently.\n**NOT connected to main webhook flow.**\n1. Click \"Test: Manual Trigger\" \u2192 Execute step\n2. Change TEST_DAG_ID in \"Parse CSV + Test Lookup\" to test different DAGs\n3. Sheet ID: 1Ri5mlG2vUN7fYWM9EotGmYpMEU71ZLHDJhtr96dGqA0",
         "height": 80,
         "width": 580,
         "color": 5
+      },
+      "id": "sticky-test-gdrive",
+      "name": "Section - GDrive Test",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        32,
+        640
+      ]
+    },
+    {
+      "id": "node-pd-update-supported",
+      "name": "PD: Set Status = SRE Supported",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1712,
+        176
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.pagerduty.com/incidents/{{ $json.incident_id }}/custom_fields/values",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "thiago.zago1@telus.com"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.pagerduty+json;version=2"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\"custom_fields\":[{\"name\":\"f_status\",\"value\":\"SRE Supported\"},{\"name\":\"f_title\",\"value\":$json.dag_id},{\"name\":\"f_rootcause\",\"value\":\"Cluster: \"+$json.composer+\" | Project: \"+$json.project}]}) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "PagerDuty REST API"
+        }
+      }
+    },
+    {
+      "id": "node-pd-update-not-supported",
+      "name": "PD: Set Status = SRE Not Supported",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1712,
+        432
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.pagerduty.com/incidents/{{ $json.incident_id }}/custom_fields/values",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "thiago.zago1@telus.com"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.pagerduty+json;version=2"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\"custom_fields\":[{\"name\":\"f_status\",\"value\":\"SRE Not Supported\"},{\"name\":\"f_title\",\"value\":$json.dag_id},{\"name\":\"f_rootcause\",\"value\":\"Cluster: \"+$json.composer+\" | Project: \"+$json.project}]}) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "PagerDuty REST API"
+        }
+      }
+    },
+    {
+      "id": "node-respond-final",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1968,
+        304
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\":\"enriched\",\"message\":\"PagerDuty incident custom fields updated successfully\"}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "sticky-pd-update",
+      "name": "Section - PD Update",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1660,
+        100
+      ],
+      "parameters": {
+        "content": "### Update PagerDuty Custom Field\nPATCH /incidents/{id} sets custom field **Status** (f_status) to:\n- \"SRE Supported\" \u2192 true branch\n- \"SRE Not Supported\" \u2192 false branch\nThen responds 200 OK to PagerDuty webhook.",
+        "height": 80,
+        "width": 420,
+        "color": 2
       }
     }
   ],
@@ -366,17 +452,6 @@
         ]
       ]
     },
-    "Log Investigation Request": {
-      "main": [
-        [
-          {
-            "node": "Respond 200 OK",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "DAG Support Lookup": {
       "main": [
         [
@@ -392,14 +467,14 @@
       "main": [
         [
           {
-            "node": "Log Investigation Request",
+            "node": "PD: Set Status = SRE Supported",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Respond 200 OK",
+            "node": "PD: Set Status = SRE Not Supported",
             "type": "main",
             "index": 0
           }
@@ -433,6 +508,28 @@
         [
           {
             "node": "Parse CSV + Test Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PD: Set Status = SRE Supported": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PD: Set Status = SRE Not Supported": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
             "type": "main",
             "index": 0
           }
