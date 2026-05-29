@@ -1,0 +1,195 @@
+{
+  "name": "CIO-DynatraceAlertInvestigate-v1",
+  "nodes": [
+    {
+      "id": "sticky-overview",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [230, 40],
+      "parameters": {
+        "content": "## CIO-DynatraceAlertInvestigate-v1\n**Purpose:** Receive PagerDuty Dynatrace MCP enrichment webhook and trigger Composer DAG investigation\n**Trigger:** Webhook POST from PagerDuty MCP enrichment at `/webhook/datahub-composer-dags-investigate`\n**Authentication:** Bearer token header — `Authorization: Bearer <token>` (configured in PagerDuty Web API connection)\n**Owner:** CIO DataHub team",
+        "height": 130,
+        "width": 1200,
+        "color": 0
+      }
+    },
+    {
+      "id": "sticky-receive",
+      "name": "Section - Receive",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [230, 210],
+      "parameters": {
+        "content": "### Receive & Validate\nAccepts POST from PagerDuty MCP enrichment. Validates Bearer token header and checks payload shape.",
+        "height": 80,
+        "width": 380,
+        "color": 3
+      }
+    },
+    {
+      "id": "sticky-process",
+      "name": "Section - Process",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [680, 210],
+      "parameters": {
+        "content": "### Extract & Route\nParses PagerDuty incident context, extracts DAG names and GCP project info for investigation.",
+        "height": 80,
+        "width": 380,
+        "color": 3
+      }
+    },
+    {
+      "id": "sticky-respond",
+      "name": "Section - Respond",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1130, 210],
+      "parameters": {
+        "content": "### Respond\nReturns 200 OK immediately to PagerDuty so the webhook call doesn't time out.",
+        "height": 80,
+        "width": 300,
+        "color": 2
+      }
+    },
+    {
+      "id": "node-webhook",
+      "name": "PagerDuty MCP Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 340],
+      "parameters": {
+        "path": "datahub-composer-dags-investigate",
+        "httpMethod": "POST",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-validate",
+      "name": "Validate Payload Shape",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [490, 340],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true },
+          "conditions": [
+            {
+              "id": "check-body",
+              "leftValue": "={{ $json.body !== undefined || $json.incident !== undefined || $json.messages !== undefined || $json.incident_id !== undefined || $json.incident_number !== undefined }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "equal" }
+            }
+          ]
+        },
+        "combineConditions": "all"
+      }
+    },
+    {
+      "id": "node-extract",
+      "name": "Extract Alert Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [720, 300],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-incident-id",
+              "name": "incident_id",
+              "value": "={{ $json.incident_id ?? $json.body?.incident?.id ?? $json.incident?.id ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-incident-title",
+              "name": "incident_title",
+              "value": "={{ $json.title ?? $json.body?.incident?.title ?? $json.incident?.title ?? $json.body?.messages?.[0]?.event?.data?.title ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-service",
+              "name": "service_name",
+              "value": "={{ $json.service_name ?? $json.body?.incident?.service?.summary ?? $json.incident?.service?.summary ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-raw",
+              "name": "raw_payload",
+              "value": "={{ JSON.stringify($json.body ?? $json) }}",
+              "type": "string"
+            },
+            {
+              "id": "field-received-at",
+              "name": "received_at",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-log",
+      "name": "Log Investigation Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300],
+      "parameters": {
+        "jsCode": "// Log the incoming alert for debugging and audit trail\nconst item = $input.first().json;\nconsole.log('[DynatraceInvestigate] Received alert:', JSON.stringify({\n  incident_id: item.incident_id,\n  incident_title: item.incident_title,\n  service_name: item.service_name,\n  received_at: item.received_at\n}));\nreturn $input.all();"
+      }
+    },
+    {
+      "id": "node-respond-ok",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1180, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'received', incident_id: $json.incident_id, timestamp: $json.received_at }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    },
+    {
+      "id": "node-respond-bad",
+      "name": "Respond 400 Bad Request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [720, 480],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"status\": \"error\", \"message\": \"Invalid or missing payload\"}",
+        "options": {
+          "responseCode": 400
+        }
+      }
+    }
+  ],
+  "connections": {
+    "PagerDuty MCP Webhook": {
+      "main": [[{ "node": "Validate Payload Shape", "type": "main", "index": 0 }]]
+    },
+    "Validate Payload Shape": {
+      "main": [
+        [{ "node": "Extract Alert Context", "type": "main", "index": 0 }],
+        [{ "node": "Respond 400 Bad Request", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract Alert Context": {
+      "main": [[{ "node": "Log Investigation Request", "type": "main", "index": 0 }]]
+    },
+    "Log Investigation Request": {
+      "main": [[{ "node": "Respond 200 OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "",
+    "executionOrder": "v1"
+  }
+}

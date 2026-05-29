@@ -1,0 +1,453 @@
+{
+  "name": "Datahub Composer Dags Enrichment",
+  "description": null,
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Datahub Composer Dags Enrichment\n**Purpose:** Receive PagerDuty Dynatrace MCP enrichment webhook and trigger Composer DAG investigation\n**Trigger:** Webhook POST from PagerDuty MCP enrichment at `/webhook/datahub-composer-dags-investigate`\n**Authentication:** Bearer token header \u2014 `Authorization: Bearer <token>` (configured in PagerDuty Web API connection)\n**Owner:** CIO DataHub team",
+        "height": 130,
+        "width": 1200,
+        "color": 0
+      },
+      "id": "sticky-overview",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        288,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Receive & Validate\nAccepts POST from PagerDuty MCP enrichment. Validates Bearer token header and checks payload shape.",
+        "height": 80,
+        "width": 380,
+        "color": 3
+      },
+      "id": "sticky-receive",
+      "name": "Section - Receive",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        112,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Extract & Route\nParses PagerDuty incident context, extracts DAG names and GCP project info for investigation.",
+        "height": 80,
+        "width": 380,
+        "color": 3
+      },
+      "id": "sticky-process",
+      "name": "Section - Process",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        416,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Respond\nReturns 200 OK immediately to PagerDuty so the webhook call doesn't time out.",
+        "height": 80,
+        "width": 300,
+        "color": 2
+      },
+      "id": "sticky-respond",
+      "name": "Section - Respond",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "datahub-composer-dags-investigate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-webhook",
+      "name": "PagerDuty MCP Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        256,
+        352
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "zt4TZEe7CZ29utc4",
+          "name": "PagerDuty MCP - Webhook Auth"
+        }
+      },
+      "webhookId": "cc5e6e90-ab46-4933-88ad-220db78033fb"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-incident-id",
+              "name": "incident_id",
+              "value": "={{ $json.body?.incident_id ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-incident-title",
+              "name": "incident_title",
+              "value": "={{ $json.body?.title ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-dag-id",
+              "name": "dag_id",
+              "value": "={{ ($json.body?.title ?? '').match(/\\|\\s*(.+?)\\s+in\\s+/)?.[1] ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-composer",
+              "name": "composer",
+              "value": "={{ ($json.body?.title ?? '').match(/\\s+in\\s+(.+?)\\s+from\\s+/)?.[1] ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-project",
+              "name": "project",
+              "value": "={{ ($json.body?.title ?? '').match(/\\s+from\\s+(.+?)\\s+failed/)?.[1] ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-service",
+              "name": "service_name",
+              "value": "={{ $json.body?.service_name ?? 'unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "field-raw",
+              "name": "raw_payload",
+              "value": "={{ JSON.stringify($json.body ?? {}) }}",
+              "type": "string"
+            },
+            {
+              "id": "field-received-at",
+              "name": "received_at",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-extract",
+      "name": "Extract Alert Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        544,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log the incoming alert for debugging and audit trail\nconst item = $input.first().json;\nconsole.log('[DynatraceInvestigate] Received alert:', JSON.stringify({\n  incident_id: item.incident_id,\n  incident_title: item.incident_title,\n  service_name: item.service_name,\n  received_at: item.received_at\n}));\nreturn $input.all();"
+      },
+      "id": "node-log",
+      "name": "Log Investigation Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'received', incident_id: $json.incident_id, timestamp: $json.received_at }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "node-respond-ok",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1904,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Check if DAG Supported\n**Get DAG from Table**: Queries n8n Data Table \"SRE_Supported_Composer_Dags\" by dag_id.\n**DAG Support Lookup**: Resolves composer shorthand, sets dag_supported flag.\n**IF**: true (Supported/Critical) \u2192 left, false (Not Found/Not Supported) \u2192 right.",
+        "height": 112,
+        "width": 700,
+        "color": 3
+      },
+      "id": "sticky-check",
+      "name": "Section - Check Support",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        832,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-supported",
+              "leftValue": "={{ String($json.dag_supported) }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-check-dag",
+      "name": "Check if DAG supported",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        304
+      ]
+    },
+    {
+      "id": "node-datatable-lookup",
+      "name": "Get DAG from Table",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        960,
+        304
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "dvMXwohR5lwZAx3g",
+          "mode": "id"
+        },
+        "mustMatch": "allFilters",
+        "conditions": {
+          "conditions": [
+            {
+              "keyName": "DAG",
+              "condition": "equals",
+              "keyValue": "={{ $('Extract Alert Context').first().json.dag_id }}"
+            }
+          ]
+        },
+        "returnAll": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "node-dag-lookup",
+      "name": "DAG Support Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        304
+      ],
+      "parameters": {
+        "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table \u2014 find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason } }];\n",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "node-test-trigger",
+      "name": "Test: Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        60,
+        700
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "node-gdrive-fetch",
+      "name": "Fetch DAG CSV from Google Sheets",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        700
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://docs.google.com/spreadsheets/d/1Ri5mlG2vUN7fYWM9EotGmYpMEU71ZLHDJhtr96dGqA0/export?format=csv&gid=0",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "node-gdrive-parse",
+      "name": "Parse CSV + Test Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        700
+      ],
+      "parameters": {
+        "jsCode": "// Parse the CSV text fetched from Google Drive\nconst raw = $input.first().json;\nconst csvText = (raw.data ?? raw.body ?? Object.values(raw)[0] ?? '').toString();\n\nconst COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\n// Parse CSV into rows (handles quoted fields with newlines)\nconst lines = csvText.split('\\n');\nconst headers = lines[0].split(',').map(h => h.trim().replace(/^\"|\"$/g, ''));\n\nconst rows = [];\nfor (let i = 1; i < lines.length; i++) {\n  const line = lines[i].trim();\n  if (!line) continue;\n  const cols = line.split(',');\n  const row = {};\n  headers.forEach((h, idx) => {\n    row[h] = (cols[idx] ?? '').replace(/^\"|\"$/g, '').trim();\n  });\n  rows.push(row);\n}\n\n// \u2500\u2500 Test: change this dag_id to test different DAGs \u2500\u2500\nconst TEST_DAG_ID = 'GCS_to_BQ_fcty_ccaas_genesys_mediation_segment_fact_load_app';\n// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\nconst match = rows.find(r => (r['DAG'] ?? '').toLowerCase() === TEST_DAG_ID.toLowerCase());\n\nlet result = {\n  test_dag_id: TEST_DAG_ID,\n  total_rows_loaded: rows.length,\n  match_found: !!match,\n  dag_supported: false,\n  support_status: 'Not Found',\n  composer: '',\n  support_reason: \"DAG '\" + TEST_DAG_ID + \"' not found in CSV\"\n};\n\nif (match) {\n  const composerRaw = (match['Datahub Composer'] ?? '').trim();\n  const notes = (match['OtherNotes'] ?? '').split(';')[0].trim();\n  result.composer = COMPOSER_MAP[composerRaw] ?? composerRaw;\n  result.support_status = notes;\n  result.dag_supported = notes.toLowerCase() !== 'not supported';\n  result.support_reason = \"DAG '\" + TEST_DAG_ID + \"' is \" + notes;\n  result.raw_row = match;\n}\n\nreturn [{ json: result }];\n",
+        "mode": "runOnceForAllItems"
+      }
+    },
+    {
+      "id": "sticky-test-gdrive",
+      "name": "Section - GDrive Test",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        30,
+        630
+      ],
+      "parameters": {
+        "content": "### Google Sheets CSV Test Block (decoupled)\nRun manually to test CSV fetch + DAG lookup independently.\n**NOT connected to main webhook flow.**\n1. Click \"Test: Manual Trigger\" \u2192 Execute step\n2. Change TEST_DAG_ID in \"Parse CSV + Test Lookup\" to test different DAGs\n3. Sheet ID: 1Ri5mlG2vUN7fYWM9EotGmYpMEU71ZLHDJhtr96dGqA0",
+        "height": 80,
+        "width": 580,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "PagerDuty MCP Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract Alert Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Alert Context": {
+      "main": [
+        [
+          {
+            "node": "Get DAG from Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Investigation Request": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DAG Support Lookup": {
+      "main": [
+        [
+          {
+            "node": "Check if DAG supported",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if DAG supported": {
+      "main": [
+        [
+          {
+            "node": "Log Investigation Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get DAG from Table": {
+      "main": [
+        [
+          {
+            "node": "DAG Support Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Test: Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch DAG CSV from Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch DAG CSV from Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV + Test Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "errorWorkflow": "",
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {}
+}
