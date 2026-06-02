@@ -1,0 +1,46 @@
+{
+  "updatedAt": "2026-05-28T14:59:01.323Z",
+  "createdAt": "2026-05-28T13:54:06.737Z",
+  "id": "qRnEjXYAVLVNLcQc",
+  "name": "My workflow 957",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "d3a49acc-9e8a-4e4c-965e-42861206459c",
+  "activeVersionId": null,
+  "versionCounter": 3,
+  "triggerCount": 0,
+  "shared": [
+    {
+      "updatedAt": "2026-05-28T13:54:06.737Z",
+      "createdAt": "2026-05-28T13:54:06.737Z",
+      "role": "workflow:owner",
+      "workflowId": "qRnEjXYAVLVNLcQc",
+      "projectId": "fIM9kFtYqFN2V0b4",
+      "project": {
+        "updatedAt": "2026-05-28T13:52:36.691Z",
+        "createdAt": "2026-05-28T13:52:36.691Z",
+        "id": "fIM9kFtYqFN2V0b4",
+        "name": "Thiago Zago <thiago.zago1@telus.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "c042fa39-54dc-4369-8a5c-3cbeb6d61d93"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

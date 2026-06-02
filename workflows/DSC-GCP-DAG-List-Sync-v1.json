@@ -1,0 +1,891 @@
+{
+  "updatedAt": "2026-06-02T20:25:50.734Z",
+  "createdAt": "2026-06-02T18:40:45.775Z",
+  "id": "t6sOxL6HNHcMVYQa",
+  "name": "DSC-GCP-DAG-List-Sync-v1",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## DSC-GCP-DAG-List-Sync-v1\n**Purpose:** Daily sync \u2014 drops and recreates SRE_Supported_Composer_Dags data table, reloads from Google Sheet, then records the new table ID in the registry.\n**Trigger:** Daily schedule (6:00 AM UTC)\n**Sheet credential:** SRE team Google Sheets Oauth (id: aY5cxQ8CpL83zdck)\n**HTTP nodes:** No credentials set \u2014 configure tzago-n8n-api-key via Header Auth in the n8n UI after deploy.\n**Owner:** CIO DataHub SRE team",
+        "height": 150,
+        "width": 1800,
+        "color": 0
+      },
+      "id": "sticky-overview",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        -384
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Phase 1 \u2014 Read Source\nReads all rows from the GCP App/DAG List Google Sheet using the SRE team OAuth credential.",
+        "height": 100,
+        "width": 380,
+        "color": 3
+      },
+      "id": "sticky-phase1",
+      "name": "Phase 1 Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "19JQ-4CU1PInH6Z_AUQKZ_pbyhR0cfR46IHsk9VHswy4",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "GCP App/DAG List",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "google-sheets-read",
+      "name": "Read DAG List from Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        288,
+        -64
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "aY5cxQ8CpL83zdck",
+          "name": "SRE team Google Sheets Oauth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "### Phase 2 \u2014 Map & Aggregate\nRenames sheet columns to table column names, then aggregates all rows into a single item for the batch insert.",
+        "height": 100,
+        "width": 560,
+        "color": 3
+      },
+      "id": "sticky-phase2",
+      "name": "Phase 2 Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        560,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "field-dag",
+              "name": "DAG",
+              "value": "={{ $json['DAG'] }}",
+              "type": "string"
+            },
+            {
+              "id": "field-composer",
+              "name": "Datahub_Composer",
+              "value": "={{ $json['Datahub Composer'] }}",
+              "type": "string"
+            },
+            {
+              "id": "field-notes",
+              "name": "OtherNotes",
+              "value": "={{ $json['OtherNotes'] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-columns",
+      "name": "Map to Table Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        560,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "id": "aggregate-sheet",
+      "name": "Aggregate Sheet Rows",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        848,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Phase 3 \u2014 Drop & Recreate Table\nDELETE removes the old SRE_Supported_Composer_Dags table entirely. POST recreates it with the correct schema. No credentials \u2014 set tzago-n8n-api-key in the UI.",
+        "height": 110,
+        "width": 560,
+        "color": 4
+      },
+      "id": "sticky-phase3",
+      "name": "Phase 3 Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://n8n.ai.telus.com/api/v1/data-tables/{{ $json.dag_table_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "delete-old-table",
+      "name": "Delete Old DAG Table",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1664,
+        -64
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "lxWMlAnLd1OKqXVk",
+          "name": "tzago-n8n-api-key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.ai.telus.com/api/v1/data-tables",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={\"name\":\"SRE_Supported_Composer_Dags\",\"columns\":[{\"name\":\"DAG\",\"type\":\"string\"},{\"name\":\"Datahub_Composer\",\"type\":\"string\"},{\"name\":\"OtherNotes\",\"type\":\"string\"}]}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "recreate-dag-table",
+      "name": "Recreate DAG Table",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1952,
+        -64
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "lxWMlAnLd1OKqXVk",
+          "name": "tzago-n8n-api-key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "### Phase 4 \u2014 Insert & Register\nBatch-inserts all sheet rows into the freshly created table using the new table ID from Phase 3. Then appends the new table ID + timestamp to the registry table for audit/lineage.",
+        "height": 110,
+        "width": 560,
+        "color": 5
+      },
+      "id": "sticky-phase4",
+      "name": "Phase 4 Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2192,
+        -208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://n8n.ai.telus.com/api/v1/data-tables/{{ $json.id }}/rows",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ data: $('Pick Latest Table ID').first().json.sheet_data }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "insert-rows",
+      "name": "Insert Rows into New Table",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2224,
+        -64
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "lxWMlAnLd1OKqXVk",
+          "name": "tzago-n8n-api-key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.ai.telus.com/api/v1/data-tables/u1tsjfOi0eBh77y5/rows",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ data: [{ dag_table_id: $('Recreate DAG Table').first().json.id, created_at: $now.toISO() }] }) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "append-registry",
+      "name": "Append New ID to Registry",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2512,
+        -64
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "lxWMlAnLd1OKqXVk",
+          "name": "tzago-n8n-api-key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "u1tsjfOi0eBh77y5",
+          "mode": "id"
+        },
+        "returnAll": true
+      },
+      "id": "node-read-registry",
+      "name": "Read Registry",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1104,
+        -64
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = items.map(i => i.json);\nif (!rows.length) throw new Error('Registry is empty \u2014 no table to delete');\nconst sorted = [...rows].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));\nconst latestId = sorted[0].dag_table_id;\nconst sheetData = $('Aggregate Sheet Rows').first().json.data || [];\nreturn [{ json: { dag_table_id: latestId, sheet_data: sheetData } }];"
+      },
+      "id": "node-pick-latest-sync",
+      "name": "Pick Latest Table ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1392,
+        -64
+      ]
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "Read DAG List from Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read DAG List from Sheet": {
+      "main": [
+        [
+          {
+            "node": "Map to Table Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map to Table Fields": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Sheet Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Sheet Rows": {
+      "main": [
+        [
+          {
+            "node": "Read Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Old DAG Table": {
+      "main": [
+        [
+          {
+            "node": "Recreate DAG Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recreate DAG Table": {
+      "main": [
+        [
+          {
+            "node": "Insert Rows into New Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Rows into New Table": {
+      "main": [
+        [
+          {
+            "node": "Append New ID to Registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Registry": {
+      "main": [
+        [
+          {
+            "node": "Pick Latest Table ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pick Latest Table ID": {
+      "main": [
+        [
+          {
+            "node": "Delete Old DAG Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": {
+    "node:Daily Schedule": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "cca9029f-d82e-4904-93de-462cb5f9ba62",
+  "activeVersionId": "a5bc12f7-05ca-4abe-a4d0-c3f1de416423",
+  "versionCounter": 56,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2026-06-02T18:40:45.775Z",
+      "createdAt": "2026-06-02T18:40:45.775Z",
+      "role": "workflow:owner",
+      "workflowId": "t6sOxL6HNHcMVYQa",
+      "projectId": "fIM9kFtYqFN2V0b4",
+      "project": {
+        "updatedAt": "2026-05-28T13:52:36.691Z",
+        "createdAt": "2026-05-28T13:52:36.691Z",
+        "id": "fIM9kFtYqFN2V0b4",
+        "name": "Thiago Zago <thiago.zago1@telus.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "creatorId": "c042fa39-54dc-4369-8a5c-3cbeb6d61d93"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-02T20:23:04.944Z",
+    "createdAt": "2026-06-02T20:23:04.944Z",
+    "versionId": "a5bc12f7-05ca-4abe-a4d0-c3f1de416423",
+    "workflowId": "t6sOxL6HNHcMVYQa",
+    "nodes": [
+      {
+        "id": "sticky-overview",
+        "name": "Overview",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -200,
+          -380
+        ],
+        "parameters": {
+          "content": "## DSC-GCP-DAG-List-Sync-v1\n**Purpose:** Daily sync \u2014 drops and recreates SRE_Supported_Composer_Dags data table, reloads from Google Sheet, then records the new table ID in the registry.\n**Trigger:** Daily schedule (6:00 AM UTC)\n**Sheet credential:** SRE team Google Sheets Oauth (id: aY5cxQ8CpL83zdck)\n**HTTP nodes:** No credentials set \u2014 configure tzago-n8n-api-key via Header Auth in the n8n UI after deploy.\n**Owner:** CIO DataHub SRE team",
+          "height": 150,
+          "width": 1800,
+          "color": 0
+        }
+      },
+      {
+        "id": "schedule-trigger",
+        "name": "Daily Schedule",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ],
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 6 * * *"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "id": "sticky-phase1",
+        "name": "Phase 1 Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          200,
+          -200
+        ],
+        "parameters": {
+          "content": "### Phase 1 \u2014 Read Source\nReads all rows from the GCP App/DAG List Google Sheet using the SRE team OAuth credential.",
+          "height": 100,
+          "width": 380,
+          "color": 3
+        }
+      },
+      {
+        "id": "google-sheets-read",
+        "name": "Read DAG List from Sheet",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4.5,
+        "position": [
+          280,
+          -60
+        ],
+        "parameters": {
+          "documentId": {
+            "__rl": true,
+            "value": "19JQ-4CU1PInH6Z_AUQKZ_pbyhR0cfR46IHsk9VHswy4",
+            "mode": "id"
+          },
+          "sheetName": {
+            "__rl": true,
+            "value": "GCP App/DAG List",
+            "mode": "name"
+          },
+          "options": {}
+        },
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "aY5cxQ8CpL83zdck",
+            "name": "SRE team Google Sheets Oauth"
+          }
+        }
+      },
+      {
+        "id": "sticky-phase2",
+        "name": "Phase 2 Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          560,
+          -200
+        ],
+        "parameters": {
+          "content": "### Phase 2 \u2014 Map & Aggregate\nRenames sheet columns to table column names, then aggregates all rows into a single item for the batch insert.",
+          "height": 100,
+          "width": 560,
+          "color": 3
+        }
+      },
+      {
+        "id": "set-columns",
+        "name": "Map to Table Fields",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [
+          560,
+          -60
+        ],
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "field-dag",
+                "name": "DAG",
+                "value": "={{ $json['DAG'] }}",
+                "type": "string"
+              },
+              {
+                "id": "field-composer",
+                "name": "Datahub_Composer",
+                "value": "={{ $json['Datahub Composer'] }}",
+                "type": "string"
+              },
+              {
+                "id": "field-notes",
+                "name": "OtherNotes",
+                "value": "={{ $json['OtherNotes'] }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "aggregate-sheet",
+        "name": "Aggregate Sheet Rows",
+        "type": "n8n-nodes-base.aggregate",
+        "typeVersion": 1,
+        "position": [
+          840,
+          -60
+        ],
+        "parameters": {
+          "aggregate": "aggregateAllItemData",
+          "options": {}
+        }
+      },
+      {
+        "id": "sticky-phase3",
+        "name": "Phase 3 Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          1080,
+          -200
+        ],
+        "parameters": {
+          "content": "### Phase 3 \u2014 Drop & Recreate Table\nDELETE removes the old SRE_Supported_Composer_Dags table entirely. POST recreates it with the correct schema. No credentials \u2014 set tzago-n8n-api-key in the UI.",
+          "height": 110,
+          "width": 560,
+          "color": 4
+        }
+      },
+      {
+        "id": "delete-old-table",
+        "name": "Delete Old DAG Table",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1660,
+          -60
+        ],
+        "parameters": {
+          "method": "DELETE",
+          "url": "=https://n8n.ai.telus.com/api/v1/data-tables/{{ $json.dag_table_id }}",
+          "options": {
+            "timeout": 15000
+          }
+        }
+      },
+      {
+        "id": "recreate-dag-table",
+        "name": "Recreate DAG Table",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1940,
+          -60
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://n8n.ai.telus.com/api/v1/data-tables",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={\"name\":\"SRE_Supported_Composer_Dags\",\"columns\":[{\"name\":\"DAG\",\"type\":\"string\"},{\"name\":\"Datahub_Composer\",\"type\":\"string\"},{\"name\":\"OtherNotes\",\"type\":\"string\"}]}",
+          "options": {
+            "timeout": 15000
+          }
+        }
+      },
+      {
+        "id": "sticky-phase4",
+        "name": "Phase 4 Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          2180,
+          -200
+        ],
+        "parameters": {
+          "content": "### Phase 4 \u2014 Insert & Register\nBatch-inserts all sheet rows into the freshly created table using the new table ID from Phase 3. Then appends the new table ID + timestamp to the registry table for audit/lineage.",
+          "height": 110,
+          "width": 560,
+          "color": 5
+        }
+      },
+      {
+        "id": "insert-rows",
+        "name": "Insert Rows into New Table",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2220,
+          -60
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "=https://n8n.ai.telus.com/api/v1/data-tables/{{ $json.id }}/rows",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ JSON.stringify({ data: $('Pick Latest Table ID').first().json.sheet_data }) }}",
+          "options": {
+            "timeout": 30000
+          }
+        }
+      },
+      {
+        "id": "append-registry",
+        "name": "Append New ID to Registry",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2500,
+          -60
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://n8n.ai.telus.com/api/v1/data-tables/u1tsjfOi0eBh77y5/rows",
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ JSON.stringify({ data: [{ dag_table_id: $('Recreate DAG Table').first().json.id, created_at: $now.toISO() }] }) }}",
+          "options": {
+            "timeout": 15000
+          }
+        }
+      },
+      {
+        "id": "node-read-registry",
+        "name": "Read Registry",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          -60
+        ],
+        "parameters": {
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "value": "u1tsjfOi0eBh77y5",
+            "mode": "id"
+          },
+          "returnAll": true
+        }
+      },
+      {
+        "id": "node-pick-latest-sync",
+        "name": "Pick Latest Table ID",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1380,
+          -60
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "const rows = items.map(i => i.json);\nif (!rows.length) throw new Error('Registry is empty \u2014 no table to delete');\nconst sorted = [...rows].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));\nconst latestId = sorted[0].dag_table_id;\nconst sheetData = $('Aggregate Sheet Rows').first().json.data || [];\nreturn [{ json: { dag_table_id: latestId, sheet_data: sheetData } }];"
+        }
+      }
+    ],
+    "connections": {
+      "Daily Schedule": {
+        "main": [
+          [
+            {
+              "node": "Read DAG List from Sheet",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read DAG List from Sheet": {
+        "main": [
+          [
+            {
+              "node": "Map to Table Fields",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Map to Table Fields": {
+        "main": [
+          [
+            {
+              "node": "Aggregate Sheet Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Aggregate Sheet Rows": {
+        "main": [
+          [
+            {
+              "node": "Read Registry",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete Old DAG Table": {
+        "main": [
+          [
+            {
+              "node": "Recreate DAG Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Recreate DAG Table": {
+        "main": [
+          [
+            {
+              "node": "Insert Rows into New Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert Rows into New Table": {
+        "main": [
+          [
+            {
+              "node": "Append New ID to Registry",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read Registry": {
+        "main": [
+          [
+            {
+              "node": "Pick Latest Table ID",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Pick Latest Table ID": {
+        "main": [
+          [
+            {
+              "node": "Delete Old DAG Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Thiago Zago",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-02T20:23:05.273Z",
+        "id": 16608,
+        "workflowId": "t6sOxL6HNHcMVYQa",
+        "versionId": "a5bc12f7-05ca-4abe-a4d0-c3f1de416423",
+        "event": "deactivated",
+        "userId": "c042fa39-54dc-4369-8a5c-3cbeb6d61d93"
+      },
+      {
+        "createdAt": "2026-06-02T20:23:05.442Z",
+        "id": 16609,
+        "workflowId": "t6sOxL6HNHcMVYQa",
+        "versionId": "a5bc12f7-05ca-4abe-a4d0-c3f1de416423",
+        "event": "activated",
+        "userId": "c042fa39-54dc-4369-8a5c-3cbeb6d61d93"
+      }
+    ]
+  }
+}
