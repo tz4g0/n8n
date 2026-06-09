@@ -254,7 +254,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table — find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\n// Enrichment fields from the matched DataTable row\nlet pd_priority = '';   // 'P1' | 'P2' | '' (blank → -- in PagerDuty)\nlet sme = '';\nlet runbook = '';\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n\n  // Priority: accept only P1/P2 (case-insensitive), else leave blank for --\n  const rawPriority = (matchRow['Priority'] ?? '').trim().toUpperCase();\n  pd_priority = (rawPriority === 'P1' || rawPriority === 'P2') ? rawPriority : '';\n  sme = (matchRow['SME'] ?? '').trim();\n  runbook = (matchRow['Runbook'] ?? '').trim();\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason, pd_priority, sme, runbook } }];\n"
+        "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table — find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\n// Enrichment fields from the matched DataTable row\nlet pd_priority = '';   // 'P1' | 'P2' | '' (blank → -- in PagerDuty)\nlet sme = '';\nlet runbook = '';\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n\n  // Priority: accept only P1/P2 (case-insensitive), else leave blank for --\n  const rawPriority = (matchRow['Priority'] ?? '').trim().toUpperCase();\n  pd_priority = (rawPriority === 'P1' || rawPriority === 'P2') ? rawPriority : '';\n  sme = (matchRow['SME'] ?? '').trim();\n  runbook = (matchRow['Runbook'] ?? '').trim();\n  // Ensure runbook is a full URL so PagerDuty auto-linkifies it.\n  if (runbook && !/^https?:\\/\\//i.test(runbook)) {\n    runbook = 'https://' + runbook.replace(/^\\/+/, '');\n  }\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason, pd_priority, sme, runbook } }];\n"
       },
       "id": "node-dag-lookup",
       "name": "DAG Support Lookup",
@@ -302,7 +302,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Resolve the P1/P2 label from DAG Support Lookup to a PagerDuty priority ID.\n// Blank or no match => priority_id null => incident priority shows as -- in PagerDuty.\nconst ctx = $('DAG Support Lookup').first().json;\nconst wanted = (ctx.pd_priority ?? '').trim().toUpperCase();\n\nconst priorities = $json.priorities ?? [];\nlet priority_id = null;\nif (wanted) {\n  const hit = priorities.find(p => (p.name ?? '').trim().toUpperCase() === wanted);\n  priority_id = hit ? hit.id : null;\n}\n\n// Pre-build the request body here so the HTTP node never parses an object literal\n// inside a {{ }} expression (n8n Tournament fails on `? {...} : null`).\nconst priority_body = JSON.stringify({\n  incident: {\n    type: 'incident_reference',\n    priority: priority_id ? { id: priority_id, type: 'priority_reference' } : null,\n  },\n});\n\nreturn [{ json: { ...ctx, priority_id, priority_body } }];\n"
+        "jsCode": "// Resolve the P1/P2 label from DAG Support Lookup to a PagerDuty priority ID.\n// Blank or no match => priority_id null => incident priority shows as -- in PagerDuty.\nconst ctx = $('DAG Support Lookup').first().json;\nconst wanted = (ctx.pd_priority ?? '').trim().toUpperCase();\n\nconst priorities = $json.priorities ?? [];\nlet priority_id = null;\nif (wanted) {\n  const hit = priorities.find(p => (p.name ?? '').trim().toUpperCase() === wanted);\n  priority_id = hit ? hit.id : null;\n}\n\n// Pre-build the request body here so the HTTP node never parses an object literal\n// inside a {{ }} expression (n8n Tournament fails on `? {...} : null`).\n\n// Pre-build the incident-note body (notes render clickable links in PagerDuty,\n// unlike the text custom field). Posted only when a runbook URL exists.\nconst rb = (ctx.runbook ?? '').trim();\nconst note_text = rb ? ('Runbook: ' + rb) : '';\nconst has_runbook = rb ? 'true' : 'false';\nconst note_body = JSON.stringify({ note: { content: note_text } });\n\nconst priority_body = JSON.stringify({\n  incident: {\n    type: 'incident_reference',\n    priority: priority_id ? { id: priority_id, type: 'priority_reference' } : null,\n  },\n});\n\nreturn [{ json: { ...ctx, priority_id, priority_body, note_text, has_runbook, note_body } }];\n"
       },
       "id": "node-resolve-priority",
       "name": "Resolve Priority ID",
@@ -510,7 +510,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        2416,
+        2864,
         304
       ]
     },
@@ -543,6 +543,85 @@
         848,
         320
       ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "has-runbook",
+              "leftValue": "={{ $('Resolve Priority ID').first().json.has_runbook }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-has-runbook",
+      "name": "Has Runbook?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.pagerduty.com/incidents/{{ $('Resolve Priority ID').first().json.incident_id }}/notes",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "thiago.zago1@telus.com"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.pagerduty+json;version=2"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $('Resolve Priority ID').first().json.note_body }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "node-add-runbook-note",
+      "name": "Add Runbook Note",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        208
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "luQ8XqEDW77eI5xm",
+          "name": "PagerDuty REST API"
+        }
+      }
     }
   ],
   "connections": {
@@ -656,7 +735,7 @@
       "main": [
         [
           {
-            "node": "Respond 200 OK",
+            "node": "Has Runbook?",
             "type": "main",
             "index": 0
           }
@@ -678,7 +757,7 @@
       "main": [
         [
           {
-            "node": "Respond 200 OK",
+            "node": "Has Runbook?",
             "type": "main",
             "index": 0
           }
@@ -690,6 +769,35 @@
         [
           {
             "node": "Get DAG from Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Runbook?": {
+      "main": [
+        [
+          {
+            "node": "Add Runbook Note",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Runbook Note": {
+      "main": [
+        [
+          {
+            "node": "Respond 200 OK",
             "type": "main",
             "index": 0
           }
@@ -984,7 +1092,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table — find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\n// Enrichment fields from the matched DataTable row\nlet pd_priority = '';   // 'P1' | 'P2' | '' (blank → -- in PagerDuty)\nlet sme = '';\nlet runbook = '';\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n\n  // Priority: accept only P1/P2 (case-insensitive), else leave blank for --\n  const rawPriority = (matchRow['Priority'] ?? '').trim().toUpperCase();\n  pd_priority = (rawPriority === 'P1' || rawPriority === 'P2') ? rawPriority : '';\n  sme = (matchRow['SME'] ?? '').trim();\n  runbook = (matchRow['Runbook'] ?? '').trim();\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason, pd_priority, sme, runbook } }];\n"
+          "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table — find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\n// Enrichment fields from the matched DataTable row\nlet pd_priority = '';   // 'P1' | 'P2' | '' (blank → -- in PagerDuty)\nlet sme = '';\nlet runbook = '';\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n\n  // Priority: accept only P1/P2 (case-insensitive), else leave blank for --\n  const rawPriority = (matchRow['Priority'] ?? '').trim().toUpperCase();\n  pd_priority = (rawPriority === 'P1' || rawPriority === 'P2') ? rawPriority : '';\n  sme = (matchRow['SME'] ?? '').trim();\n  runbook = (matchRow['Runbook'] ?? '').trim();\n  // Ensure runbook is a full URL so PagerDuty auto-linkifies it.\n  if (runbook && !/^https?:\\/\\//i.test(runbook)) {\n    runbook = 'https://' + runbook.replace(/^\\/+/, '');\n  }\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason, pd_priority, sme, runbook } }];\n"
         },
         "id": "node-dag-lookup",
         "name": "DAG Support Lookup",
@@ -1100,7 +1208,7 @@
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
         "position": [
-          2208,
+          2864,
           304
         ]
       },
@@ -1133,6 +1241,85 @@
           848,
           320
         ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "has-runbook",
+                "leftValue": "={{ $('Resolve Priority ID').first().json.has_runbook }}",
+                "rightValue": "true",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "id": "node-has-runbook",
+        "name": "Has Runbook?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          2416,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "=https://api.pagerduty.com/incidents/{{ $('Resolve Priority ID').first().json.incident_id }}/notes",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "From",
+                "value": "thiago.zago1@telus.com"
+              },
+              {
+                "name": "Accept",
+                "value": "application/vnd.pagerduty+json;version=2"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "={{ $('Resolve Priority ID').first().json.note_body }}",
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "id": "node-add-runbook-note",
+        "name": "Add Runbook Note",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2640,
+          208
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "luQ8XqEDW77eI5xm",
+            "name": "PagerDuty REST API"
+          }
+        }
       }
     ],
     "connections": {
@@ -1236,6 +1423,57 @@
           [
             {
               "node": "Get DAG from Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PD: Set Priority (Supported)": {
+        "main": [
+          [
+            {
+              "node": "Has Runbook?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PD: Set Priority (Not Supported)": {
+        "main": [
+          [
+            {
+              "node": "Has Runbook?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Runbook?": {
+        "main": [
+          [
+            {
+              "node": "Add Runbook Note",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond 200 OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Add Runbook Note": {
+        "main": [
+          [
+            {
+              "node": "Respond 200 OK",
               "type": "main",
               "index": 0
             }
