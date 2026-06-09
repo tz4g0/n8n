@@ -90,7 +90,7 @@
     },
     {
       "parameters": {
-        "content": "### Phase 2 \u2014 Map & Aggregate\nRenames sheet columns to table column names, then aggregates all rows into a single item for the batch insert.",
+        "content": "### Phase 2 \u2014 Map & Aggregate\nRenames sheet columns to table column names (DAG, Datahub_Composer, OtherNotes, SME, Priority, Runbook), then aggregates all rows into a single item for the batch insert.",
         "height": 100,
         "width": 560,
         "color": 3
@@ -124,6 +124,24 @@
               "id": "field-notes",
               "name": "OtherNotes",
               "value": "={{ $json['OtherNotes'] }}",
+              "type": "string"
+            },
+            {
+              "id": "field-sme",
+              "name": "SME",
+              "value": "={{ $json['SME'] }}",
+              "type": "string"
+            },
+            {
+              "id": "field-priority",
+              "name": "Priority",
+              "value": "={{ $json['Priority'] }}",
+              "type": "string"
+            },
+            {
+              "id": "field-runbook",
+              "name": "Runbook",
+              "value": "={{ $json['Runbook'] }}",
               "type": "string"
             }
           ]
@@ -203,7 +221,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={\"name\":\"SRE_Supported_Composer_Dags\",\"columns\":[{\"name\":\"DAG\",\"type\":\"string\"},{\"name\":\"Datahub_Composer\",\"type\":\"string\"},{\"name\":\"OtherNotes\",\"type\":\"string\"}]}",
+        "body": "={\"name\":\"SRE_Supported_Composer_Dags\",\"columns\":[{\"name\":\"DAG\",\"type\":\"string\"},{\"name\":\"Datahub_Composer\",\"type\":\"string\"},{\"name\":\"OtherNotes\",\"type\":\"string\"},{\"name\":\"SME\",\"type\":\"string\"},{\"name\":\"Priority\",\"type\":\"string\"},{\"name\":\"Runbook\",\"type\":\"string\"}]}",
         "options": {
           "timeout": 15000
         }
@@ -598,6 +616,24 @@
                 "name": "OtherNotes",
                 "value": "={{ $json['OtherNotes'] }}",
                 "type": "string"
+              },
+              {
+                "id": "field-sme",
+                "name": "SME",
+                "value": "={{ $json['SME'] }}",
+                "type": "string"
+              },
+              {
+                "id": "field-priority",
+                "name": "Priority",
+                "value": "={{ $json['Priority'] }}",
+                "type": "string"
+              },
+              {
+                "id": "field-runbook",
+                "name": "Runbook",
+                "value": "={{ $json['Runbook'] }}",
+                "type": "string"
               }
             ]
           },
@@ -666,7 +702,7 @@
           "sendBody": true,
           "contentType": "raw",
           "rawContentType": "application/json",
-          "body": "={\"name\":\"SRE_Supported_Composer_Dags\",\"columns\":[{\"name\":\"DAG\",\"type\":\"string\"},{\"name\":\"Datahub_Composer\",\"type\":\"string\"},{\"name\":\"OtherNotes\",\"type\":\"string\"}]}",
+          "body": "={\"name\":\"SRE_Supported_Composer_Dags\",\"columns\":[{\"name\":\"DAG\",\"type\":\"string\"},{\"name\":\"Datahub_Composer\",\"type\":\"string\"},{\"name\":\"OtherNotes\",\"type\":\"string\"},{\"name\":\"SME\",\"type\":\"string\"},{\"name\":\"Priority\",\"type\":\"string\"},{\"name\":\"Runbook\",\"type\":\"string\"}]}",
           "options": {
             "timeout": 15000
           }

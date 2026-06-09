@@ -9,7 +9,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Datahub Composer Dags Enrichment\n**Purpose:** Receive PagerDuty Dynatrace MCP enrichment webhook and trigger Composer DAG investigation\n**Trigger:** Webhook POST from PagerDuty MCP enrichment at `/webhook/datahub-composer-dags-investigate`\n**Authentication:** Bearer token header \u2014 `Authorization: Bearer <token>` (configured in PagerDuty Web API connection)\n**Owner:** CIO DataHub team",
+        "content": "## Datahub Composer Dags Enrichment\n**Purpose:** Receive PagerDuty Dynatrace MCP enrichment webhook and trigger Composer DAG investigation\n**Trigger:** Webhook POST from PagerDuty MCP enrichment at `/webhook/datahub-composer-dags-investigate`\n**Authentication:** Bearer token header — `Authorization: Bearer <token>` (configured in PagerDuty Web API connection)\n**Owner:** CIO DataHub team",
         "height": 130,
         "width": 1200,
         "color": 0
@@ -167,7 +167,7 @@
     },
     {
       "parameters": {
-        "content": "### Check if DAG Supported\n**Get DAG from Table**: Queries n8n Data Table \"SRE_Supported_Composer_Dags\" by dag_id.\n**DAG Support Lookup**: Resolves composer shorthand, sets dag_supported flag.\n**IF**: true (Supported/Critical) \u2192 left, false (Not Found/Not Supported) \u2192 right.",
+        "content": "### Check if DAG Supported\n**Get DAG from Table**: Queries n8n Data Table \"SRE_Supported_Composer_Dags\" by dag_id.\n**DAG Support Lookup**: Resolves composer shorthand, sets dag_supported flag.\n**IF**: true (Supported/Critical) → left, false (Not Found/Not Supported) → right.",
         "height": 112,
         "width": 700,
         "color": 3
@@ -254,7 +254,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table \u2014 find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason } }];\n"
+        "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table — find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\n// Enrichment fields from the matched DataTable row\nlet pd_priority = '';   // 'P1' | 'P2' | '' (blank → -- in PagerDuty)\nlet sme = '';\nlet runbook = '';\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n\n  // Priority: accept only P1/P2 (case-insensitive), else leave blank for --\n  const rawPriority = (matchRow['Priority'] ?? '').trim().toUpperCase();\n  pd_priority = (rawPriority === 'P1' || rawPriority === 'P2') ? rawPriority : '';\n  sme = (matchRow['SME'] ?? '').trim();\n  runbook = (matchRow['Runbook'] ?? '').trim();\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason, pd_priority, sme, runbook } }];\n"
       },
       "id": "node-dag-lookup",
       "name": "DAG Support Lookup",
@@ -263,6 +263,54 @@
       "position": [
         1440,
         304
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.pagerduty.com/priorities",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.pagerduty+json;version=2"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "node-pd-get-priorities",
+      "name": "Get PD Priorities",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1456,
+        544
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "luQ8XqEDW77eI5xm",
+          "name": "PagerDuty REST API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Resolve the P1/P2 label from DAG Support Lookup to a PagerDuty priority ID.\n// Blank or no match => priority_id null => incident priority shows as -- in PagerDuty.\nconst ctx = $('DAG Support Lookup').first().json;\nconst wanted = (ctx.pd_priority ?? '').trim().toUpperCase();\n\nconst priorities = $json.priorities ?? [];\nlet priority_id = null;\nif (wanted) {\n  const hit = priorities.find(p => (p.name ?? '').trim().toUpperCase() === wanted);\n  priority_id = hit ? hit.id : null;\n}\n\n// Pre-build the request body here so the HTTP node never parses an object literal\n// inside a {{ }} expression (n8n Tournament fails on `? {...} : null`).\nconst priority_body = JSON.stringify({\n  incident: {\n    type: 'incident_reference',\n    priority: priority_id ? { id: priority_id, type: 'priority_reference' } : null,\n  },\n});\n\nreturn [{ json: { ...ctx, priority_id, priority_body } }];\n"
+      },
+      "id": "node-resolve-priority",
+      "name": "Resolve Priority ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1568,
+        544
       ]
     },
     {
@@ -291,7 +339,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\"custom_fields\":[{\"name\":\"f_status\",\"value\":\"SRE Supported\"},{\"name\":\"f_title\",\"value\":$json.dag_id},{\"name\":\"f_rootcause\",\"value\":\"Cluster: \"+$json.composer+\" | Project: \"+$json.project}]}) }}",
+        "body": "={{ JSON.stringify({\"custom_fields\":[{\"name\":\"f_status\",\"value\":\"SRE Supported\"},{\"name\":\"f_title\",\"value\":$json.dag_id},{\"name\":\"f_rootcause\",\"value\":($json.sme ? \"SME: \"+$json.sme : \"\")+($json.runbook ? ($json.sme ? \" | \" : \"\")+\"Runbook: \"+$json.runbook : \"\")}]}) }}",
         "options": {
           "timeout": 15000
         }
@@ -337,7 +385,7 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({\"custom_fields\":[{\"name\":\"f_status\",\"value\":\"SRE Not Supported\"},{\"name\":\"f_title\",\"value\":$json.dag_id},{\"name\":\"f_rootcause\",\"value\":\"Cluster: \"+$json.composer+\" | Project: \"+$json.project}]}) }}",
+        "body": "={{ JSON.stringify({\"custom_fields\":[{\"name\":\"f_status\",\"value\":\"SRE Not Supported\"},{\"name\":\"f_title\",\"value\":$json.dag_id},{\"name\":\"f_rootcause\",\"value\":($json.sme ? \"SME: \"+$json.sme : \"\")+($json.runbook ? ($json.sme ? \" | \" : \"\")+\"Runbook: \"+$json.runbook : \"\")}]}) }}",
         "options": {
           "timeout": 15000
         }
@@ -348,6 +396,98 @@
       "typeVersion": 4.2,
       "position": [
         1952,
+        432
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "luQ8XqEDW77eI5xm",
+          "name": "PagerDuty REST API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.pagerduty.com/incidents/{{ $('Resolve Priority ID').first().json.incident_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "thiago.zago1@telus.com"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.pagerduty+json;version=2"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $('Resolve Priority ID').first().json.priority_body }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "node-pd-priority-supported",
+      "name": "PD: Set Priority (Supported)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2176,
+        176
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "luQ8XqEDW77eI5xm",
+          "name": "PagerDuty REST API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.pagerduty.com/incidents/{{ $('Resolve Priority ID').first().json.incident_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "thiago.zago1@telus.com"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.pagerduty+json;version=2"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $('Resolve Priority ID').first().json.priority_body }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "node-pd-priority-not-supported",
+      "name": "PD: Set Priority (Not Supported)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2176,
         432
       ],
       "credentials": {
@@ -370,15 +510,15 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
       "position": [
-        2208,
+        2416,
         304
       ]
     },
     {
       "parameters": {
-        "content": "### Update PagerDuty Custom Field\nPATCH /incidents/{id} sets custom field **Status** (f_status) to:\n- \"SRE Supported\" \u2192 true branch\n- \"SRE Not Supported\" \u2192 false branch\nThen responds 200 OK to PagerDuty webhook.",
-        "height": 80,
-        "width": 420,
+        "content": "### Update PagerDuty Enrichments\nPer branch: PUT /incidents/{id}/custom_fields/values sets **f_status** (SRE Supported/Not Supported), **f_title** (dag_id), **f_rootcause** (SME + Runbook URL; bare URL so PagerDuty auto-linkifies it). Then PUT /incidents/{id} sets native **priority** (P1/P2 by name, blank → --). Then responds 200 OK.",
+        "height": 110,
+        "width": 560,
         "color": 2
       },
       "id": "sticky-pd-update",
@@ -393,7 +533,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const rows = items.map(i => i.json); if (!rows.length) throw new Error('Registry table is empty \u2014 run DSC-GCP-DAG-List-Sync-v1 first'); const sorted = [...rows].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)); return [{ json: { dag_table_id: sorted[0].dag_table_id } }];"
+        "jsCode": "const rows = items.map(i => i.json); if (!rows.length) throw new Error('Registry table is empty — run DSC-GCP-DAG-List-Sync-v1 first'); const sorted = [...rows].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)); return [{ json: { dag_table_id: sorted[0].dag_table_id } }];"
       },
       "id": "node-pick-latest-id",
       "name": "Pick Latest Table ID",
@@ -443,6 +583,28 @@
       "main": [
         [
           {
+            "node": "Get PD Priorities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get PD Priorities": {
+      "main": [
+        [
+          {
+            "node": "Resolve Priority ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Priority ID": {
+      "main": [
+        [
+          {
             "node": "Check if DAG supported",
             "type": "main",
             "index": 0
@@ -483,6 +645,17 @@
       "main": [
         [
           {
+            "node": "PD: Set Priority (Supported)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PD: Set Priority (Supported)": {
+      "main": [
+        [
+          {
             "node": "Respond 200 OK",
             "type": "main",
             "index": 0
@@ -491,6 +664,17 @@
       ]
     },
     "PD: Set Status = SRE Not Supported": {
+      "main": [
+        [
+          {
+            "node": "PD: Set Priority (Not Supported)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PD: Set Priority (Not Supported)": {
       "main": [
         [
           {
@@ -555,7 +739,7 @@
     "nodes": [
       {
         "parameters": {
-          "content": "## Datahub Composer Dags Enrichment\n**Purpose:** Receive PagerDuty Dynatrace MCP enrichment webhook and trigger Composer DAG investigation\n**Trigger:** Webhook POST from PagerDuty MCP enrichment at `/webhook/datahub-composer-dags-investigate`\n**Authentication:** Bearer token header \u2014 `Authorization: Bearer <token>` (configured in PagerDuty Web API connection)\n**Owner:** CIO DataHub team",
+          "content": "## Datahub Composer Dags Enrichment\n**Purpose:** Receive PagerDuty Dynatrace MCP enrichment webhook and trigger Composer DAG investigation\n**Trigger:** Webhook POST from PagerDuty MCP enrichment at `/webhook/datahub-composer-dags-investigate`\n**Authentication:** Bearer token header — `Authorization: Bearer <token>` (configured in PagerDuty Web API connection)\n**Owner:** CIO DataHub team",
           "height": 130,
           "width": 1200,
           "color": 0
@@ -713,7 +897,7 @@
       },
       {
         "parameters": {
-          "content": "### Check if DAG Supported\n**Get DAG from Table**: Queries n8n Data Table \"SRE_Supported_Composer_Dags\" by dag_id.\n**DAG Support Lookup**: Resolves composer shorthand, sets dag_supported flag.\n**IF**: true (Supported/Critical) \u2192 left, false (Not Found/Not Supported) \u2192 right.",
+          "content": "### Check if DAG Supported\n**Get DAG from Table**: Queries n8n Data Table \"SRE_Supported_Composer_Dags\" by dag_id.\n**DAG Support Lookup**: Resolves composer shorthand, sets dag_supported flag.\n**IF**: true (Supported/Critical) → left, false (Not Found/Not Supported) → right.",
           "height": 112,
           "width": 700,
           "color": 3
@@ -800,7 +984,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table \u2014 find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason } }];\n"
+          "jsCode": "const COMPOSER_MAP = {\n  'b1':'datahub-composer-c-1-pr','b2':'datahub-composer-c-2-pr',\n  'b3':'datahub-composer-c-3-pr','c1':'datahub-composer-c-1-pr',\n  'c2':'datahub-composer-c-2-pr','c3':'datahub-composer-c-3-pr',\n  'c4':'datahub-composer-c-4-pr','datahub-composer-2':'datahub-composer-c-2-pr'\n};\n\nconst extracted = $('Extract Alert Context').first().json;\nconst dagId = (extracted.dag_id ?? '').trim().toLowerCase();\nconst composerFromPayload = (extracted.composer ?? '').trim();\n\n// All rows from Data Table — find matching DAG (case-insensitive)\nconst rows = $input.all();\nconst match = rows.find(r => (r.json['DAG'] ?? '').trim().toLowerCase() === dagId);\nconst matchRow = match ? match.json : null;\n\nlet resolvedComposer = composerFromPayload;\nlet dag_supported = false;\nlet support_status = 'Not Found';\nlet support_reason = \"DAG '\" + extracted.dag_id + \"' not found in SRE support table\";\n\n// Enrichment fields from the matched DataTable row\nlet pd_priority = '';   // 'P1' | 'P2' | '' (blank → -- in PagerDuty)\nlet sme = '';\nlet runbook = '';\n\nif (matchRow) {\n  const sheetComposer = (matchRow['Datahub Composer'] ?? '').trim();\n  if (sheetComposer) {\n    resolvedComposer = COMPOSER_MAP[sheetComposer] ?? sheetComposer;\n  }\n  const notes = (matchRow['OtherNotes'] ?? '').split(';')[0].trim();\n  support_status = notes;\n  if (notes.toLowerCase() === 'not supported') {\n    dag_supported = false;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is explicitly marked as Not Supported\";\n  } else {\n    dag_supported = true;\n    support_reason = \"DAG '\" + extracted.dag_id + \"' is \" + notes;\n  }\n\n  // Priority: accept only P1/P2 (case-insensitive), else leave blank for --\n  const rawPriority = (matchRow['Priority'] ?? '').trim().toUpperCase();\n  pd_priority = (rawPriority === 'P1' || rawPriority === 'P2') ? rawPriority : '';\n  sme = (matchRow['SME'] ?? '').trim();\n  runbook = (matchRow['Runbook'] ?? '').trim();\n}\n\nreturn [{ json: { ...extracted, composer: resolvedComposer, dag_supported, support_status, support_reason, pd_priority, sme, runbook } }];\n"
         },
         "id": "node-dag-lookup",
         "name": "DAG Support Lookup",
@@ -837,7 +1021,7 @@
           "sendBody": true,
           "contentType": "raw",
           "rawContentType": "application/json",
-          "body": "={{ JSON.stringify({\"custom_fields\":[{\"name\":\"f_status\",\"value\":\"SRE Supported\"},{\"name\":\"f_title\",\"value\":$json.dag_id},{\"name\":\"f_rootcause\",\"value\":\"Cluster: \"+$json.composer+\" | Project: \"+$json.project}]}) }}",
+          "body": "={{ JSON.stringify({\"custom_fields\":[{\"name\":\"f_status\",\"value\":\"SRE Supported\"},{\"name\":\"f_title\",\"value\":$json.dag_id},{\"name\":\"f_rootcause\",\"value\":($json.sme ? \"SME: \"+$json.sme : \"\")+($json.runbook ? ($json.sme ? \" | \" : \"\")+\"Runbook: \"+$json.runbook : \"\")}]}) }}",
           "options": {
             "timeout": 15000
           }
@@ -883,7 +1067,7 @@
           "sendBody": true,
           "contentType": "raw",
           "rawContentType": "application/json",
-          "body": "={{ JSON.stringify({\"custom_fields\":[{\"name\":\"f_status\",\"value\":\"SRE Not Supported\"},{\"name\":\"f_title\",\"value\":$json.dag_id},{\"name\":\"f_rootcause\",\"value\":\"Cluster: \"+$json.composer+\" | Project: \"+$json.project}]}) }}",
+          "body": "={{ JSON.stringify({\"custom_fields\":[{\"name\":\"f_status\",\"value\":\"SRE Not Supported\"},{\"name\":\"f_title\",\"value\":$json.dag_id},{\"name\":\"f_rootcause\",\"value\":($json.sme ? \"SME: \"+$json.sme : \"\")+($json.runbook ? ($json.sme ? \" | \" : \"\")+\"Runbook: \"+$json.runbook : \"\")}]}) }}",
           "options": {
             "timeout": 15000
           }
@@ -922,7 +1106,7 @@
       },
       {
         "parameters": {
-          "content": "### Update PagerDuty Custom Field\nPATCH /incidents/{id} sets custom field **Status** (f_status) to:\n- \"SRE Supported\" \u2192 true branch\n- \"SRE Not Supported\" \u2192 false branch\nThen responds 200 OK to PagerDuty webhook.",
+          "content": "### Update PagerDuty Enrichments\nPer branch: PUT /incidents/{id}/custom_fields/values sets **f_status** (SRE Supported/Not Supported), **f_title** (dag_id), **f_rootcause** (SME + Runbook URL; bare URL so PagerDuty auto-linkifies it). Then PUT /incidents/{id} sets native **priority** (P1/P2 by name, blank → --). Then responds 200 OK.",
           "height": 80,
           "width": 420,
           "color": 2
@@ -939,7 +1123,7 @@
       {
         "parameters": {
           "mode": "runOnceForAllItems",
-          "jsCode": "const rows = items.map(i => i.json); if (!rows.length) throw new Error('Registry table is empty \u2014 run DSC-GCP-DAG-List-Sync-v1 first'); const sorted = [...rows].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)); return [{ json: { dag_table_id: sorted[0].dag_table_id } }];"
+          "jsCode": "const rows = items.map(i => i.json); if (!rows.length) throw new Error('Registry table is empty — run DSC-GCP-DAG-List-Sync-v1 first'); const sorted = [...rows].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)); return [{ json: { dag_table_id: sorted[0].dag_table_id } }];"
         },
         "id": "node-pick-latest-id",
         "name": "Pick Latest Table ID",
