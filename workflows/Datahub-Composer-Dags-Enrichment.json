@@ -516,7 +516,7 @@
     },
     {
       "parameters": {
-        "content": "### Update PagerDuty Enrichments\nPer branch: PUT /incidents/{id}/custom_fields/values sets **f_status** (SRE Supported/Not Supported), **f_title** (dag_id), **f_rootcause** (SME + Runbook URL; bare URL so PagerDuty auto-linkifies it). Then PUT /incidents/{id} sets native **priority** (P1/P2 by name, blank → --). Then responds 200 OK.",
+        "content": "### Update PagerDuty Enrichments\nPer branch: PUT /incidents/{id}/custom_fields/values sets **f_status** (SRE Supported/Not Supported), **f_title** (dag_id), **f_rootcause** (SME + Runbook URL). Both set native **priority** (P1/P2 by name, blank → --). **Not-Supported only**: PUT /incidents/{id} sets **urgency=low**. When a runbook exists, post it as a clickable incident **note**. Then responds 200 OK.",
         "height": 110,
         "width": 560,
         "color": 2
@@ -615,6 +615,52 @@
       "position": [
         2640,
         208
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "luQ8XqEDW77eI5xm",
+          "name": "PagerDuty REST API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.pagerduty.com/incidents/{{ $('Resolve Priority ID').first().json.incident_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "From",
+              "value": "thiago.zago1@telus.com"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.pagerduty+json;version=2"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "{\"incident\":{\"type\":\"incident_reference\",\"urgency\":\"low\"}}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "node-pd-urgency-low",
+      "name": "PD: Set Urgency Low",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        560
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -757,7 +803,7 @@
       "main": [
         [
           {
-            "node": "Has Runbook?",
+            "node": "PD: Set Urgency Low",
             "type": "main",
             "index": 0
           }
@@ -798,6 +844,17 @@
         [
           {
             "node": "Respond 200 OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PD: Set Urgency Low": {
+      "main": [
+        [
+          {
+            "node": "Has Runbook?",
             "type": "main",
             "index": 0
           }
@@ -1214,7 +1271,7 @@
       },
       {
         "parameters": {
-          "content": "### Update PagerDuty Enrichments\nPer branch: PUT /incidents/{id}/custom_fields/values sets **f_status** (SRE Supported/Not Supported), **f_title** (dag_id), **f_rootcause** (SME + Runbook URL; bare URL so PagerDuty auto-linkifies it). Then PUT /incidents/{id} sets native **priority** (P1/P2 by name, blank → --). Then responds 200 OK.",
+          "content": "### Update PagerDuty Enrichments\nPer branch: PUT /incidents/{id}/custom_fields/values sets **f_status** (SRE Supported/Not Supported), **f_title** (dag_id), **f_rootcause** (SME + Runbook URL). Both set native **priority** (P1/P2 by name, blank → --). **Not-Supported only**: PUT /incidents/{id} sets **urgency=low**. When a runbook exists, post it as a clickable incident **note**. Then responds 200 OK.",
           "height": 80,
           "width": 420,
           "color": 2
@@ -1313,6 +1370,52 @@
         "position": [
           2640,
           208
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "luQ8XqEDW77eI5xm",
+            "name": "PagerDuty REST API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "method": "PUT",
+          "url": "=https://api.pagerduty.com/incidents/{{ $('Resolve Priority ID').first().json.incident_id }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "From",
+                "value": "thiago.zago1@telus.com"
+              },
+              {
+                "name": "Accept",
+                "value": "application/vnd.pagerduty+json;version=2"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "raw",
+          "rawContentType": "application/json",
+          "body": "{\"incident\":{\"type\":\"incident_reference\",\"urgency\":\"low\"}}",
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "id": "node-pd-urgency-low",
+        "name": "PD: Set Urgency Low",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          2400,
+          560
         ],
         "credentials": {
           "httpHeaderAuth": {
@@ -1444,7 +1547,7 @@
         "main": [
           [
             {
-              "node": "Has Runbook?",
+              "node": "PD: Set Urgency Low",
               "type": "main",
               "index": 0
             }
@@ -1474,6 +1577,17 @@
           [
             {
               "node": "Respond 200 OK",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "PD: Set Urgency Low": {
+        "main": [
+          [
+            {
+              "node": "Has Runbook?",
               "type": "main",
               "index": 0
             }
